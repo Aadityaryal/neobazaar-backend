@@ -1,4 +1,4 @@
-import { CreateUserDTO, LoginUserDTO } from "../dtos/user.dto";
+import { CreateUserDTO, LoginUserDTO, AdminCreateUserDTO, AdminUpdateUserDTO, UpdateSelfDTO } from "../dtos/user.dto";
 import { UserRepository } from "../repositories/user.repository";
 import bcryptjs from "bcryptjs"
 import { HttpError } from "../errors/http-error";
@@ -8,7 +8,7 @@ import { JWT_SECRET } from "../config";
 let userRepository = new UserRepository();
 
 export class UserService {
-    async createUser(data: CreateUserDTO) {
+    async createUser(data: CreateUserDTO | AdminCreateUserDTO) {
         // business logic before creating user
         const emailCheck = await userRepository.getUserByEmail(data.email);
         if (emailCheck) {
@@ -28,6 +28,44 @@ export class UserService {
         // Remove password from response
         const { password, ...userWithoutPassword } = newUser.toObject();
         return userWithoutPassword;
+    }
+
+    async getAllUsers() {
+        const users = await userRepository.getAllUsers();
+        return users.map((user) => {
+            const { password, ...userWithoutPassword } = user.toObject();
+            return userWithoutPassword;
+        });
+    }
+
+    async getUserById(id: string) {
+        const user = await userRepository.getUserById(id);
+        if (!user) {
+            throw new HttpError(404, "User not found");
+        }
+        const { password, ...userWithoutPassword } = user.toObject();
+        return userWithoutPassword;
+    }
+
+    async updateUser(id: string, updateData: AdminUpdateUserDTO | UpdateSelfDTO) {
+        if (updateData.password) {
+            updateData.password = await bcryptjs.hash(updateData.password, 10);
+        }
+
+        const updatedUser = await userRepository.updateUser(id, updateData);
+        if (!updatedUser) {
+            throw new HttpError(404, "User not found");
+        }
+        const { password, ...userWithoutPassword } = updatedUser.toObject();
+        return userWithoutPassword;
+    }
+
+    async deleteUser(id: string) {
+        const deleted = await userRepository.deleteUser(id);
+        if (!deleted) {
+            throw new HttpError(404, "User not found");
+        }
+        return true;
     }
 
     async loginUser(data: LoginUserDTO) {
