@@ -3,44 +3,30 @@ import app from '../../app';
 import { UserModel } from '../../models/user.model';
 
 describe('Auth API Integration Tests', () => {
+    const unique = Date.now();
     const testUser = {
-        firstName: 'Test',
-        lastName: 'User',
-        email: 'test@example.com',
-        username: 'testuser',
+        name: 'Test User',
+        email: `test-${unique}@example.com`,
         password: 'password123',
-        confirmPassword: 'password123',
-    };
-
-    const adminUser = {
-        firstName: 'Admin',
-        lastName: 'User',
-        email: 'admin@example.com',
-        username: 'adminuser',
-        password: 'admin123',
-        confirmPassword: 'admin123',
+        location: 'Kathmandu',
     };
 
     beforeAll(async () => {
         await UserModel.deleteOne({ email: testUser.email });
-        await UserModel.deleteOne({ email: adminUser.email });
     });
 
     afterAll(async () => {
         await UserModel.deleteOne({ email: testUser.email });
-        await UserModel.deleteOne({ email: adminUser.email });
     });
 
-    describe('POST /api/auth/register', () => {
+    describe('POST /api/v1/auth/register', () => {
         test('should validate missing email', async () => {
             const res = await request(app)
-                .post('/api/auth/register')
+                .post('/api/v1/auth/register')
                 .send({
-                    firstName: testUser.firstName,
-                    lastName: testUser.lastName,
-                    username: testUser.username,
+                    name: testUser.name,
                     password: testUser.password,
-                    confirmPassword: testUser.confirmPassword,
+                    location: testUser.location,
                 });
 
             expect(res.statusCode).toBe(400);
@@ -49,7 +35,7 @@ describe('Auth API Integration Tests', () => {
 
         test('should validate invalid email format', async () => {
             const res = await request(app)
-                .post('/api/auth/register')
+                .post('/api/v1/auth/register')
                 .send({
                     ...testUser,
                     email: 'invalid-email',
@@ -59,64 +45,51 @@ describe('Auth API Integration Tests', () => {
             expect(res.body.success).toBe(false);
         });
 
-        test('should validate password mismatch', async () => {
+        test('should validate short password', async () => {
             const res = await request(app)
-                .post('/api/auth/register')
+                .post('/api/v1/auth/register')
                 .send({
                     ...testUser,
-                    confirmPassword: 'different123',
+                    password: '123',
                 });
 
             expect(res.statusCode).toBe(400);
             expect(res.body.success).toBe(false);
-            expect(res.body.message).toContain('Passwords do not match');
         });
 
         test('should register new user successfully', async () => {
             const res = await request(app)
-                .post('/api/auth/register')
+                .post('/api/v1/auth/register')
                 .send(testUser);
 
             expect(res.statusCode).toBe(201);
             expect(res.body.success).toBe(true);
-            expect(res.body.message).toBe('User Created');
+            expect(res.body.message).toBe('Registration successful');
+            expect(res.body.token ?? res.body.data?.token).toBeDefined();
             expect(res.body.data).toBeDefined();
             expect(res.body.data.email).toBe(testUser.email);
-            expect(res.body.data.username).toBe(testUser.username);
-            expect(res.body.data.password).toBeUndefined();
+            expect(res.body.data.passwordHash).toBeUndefined();
+            expect(res.headers['set-cookie']).toBeDefined();
         });
 
         test('should reject duplicate email', async () => {
             const res = await request(app)
-                .post('/api/auth/register')
+                .post('/api/v1/auth/register')
                 .send({
                     ...testUser,
-                    username: 'differentusername',
+                    name: 'Another User',
                 });
 
-            expect(res.statusCode).toBe(403);
+            expect(res.statusCode).toBe(409);
             expect(res.body.success).toBe(false);
             expect(res.body.message).toBe('Email already in use');
         });
-
-        test('should reject duplicate username', async () => {
-            const res = await request(app)
-                .post('/api/auth/register')
-                .send({
-                    ...testUser,
-                    email: 'different@example.com',
-                });
-
-            expect(res.statusCode).toBe(403);
-            expect(res.body.success).toBe(false);
-            expect(res.body.message).toBe('Username already in use');
-        });
     });
 
-    describe('POST /api/auth/login', () => {
+    describe('POST /api/v1/auth/login', () => {
         test('should validate missing password', async () => {
             const res = await request(app)
-                .post('/api/auth/login')
+                .post('/api/v1/auth/login')
                 .send({
                     email: testUser.email,
                 });
@@ -127,20 +100,20 @@ describe('Auth API Integration Tests', () => {
 
         test('should fail with non-existent email', async () => {
             const res = await request(app)
-                .post('/api/auth/login')
+                .post('/api/v1/auth/login')
                 .send({
                     email: 'nonexistent@example.com',
                     password: testUser.password,
                 });
 
-            expect(res.statusCode).toBe(404);
+            expect(res.statusCode).toBe(401);
             expect(res.body.success).toBe(false);
-            expect(res.body.message).toBe('User not found');
+            expect(res.body.message).toBe('Invalid credentials');
         });
 
         test('should fail with incorrect password', async () => {
             const res = await request(app)
-                .post('/api/auth/login')
+                .post('/api/v1/auth/login')
                 .send({
                     email: testUser.email,
                     password: 'wrongpassword',
@@ -153,7 +126,7 @@ describe('Auth API Integration Tests', () => {
 
         test('should login successfully with valid credentials', async () => {
             const res = await request(app)
-                .post('/api/auth/login')
+                .post('/api/v1/auth/login')
                 .send({
                     email: testUser.email,
                     password: testUser.password,
@@ -162,15 +135,15 @@ describe('Auth API Integration Tests', () => {
             expect(res.statusCode).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.message).toBe('Login successful');
-            expect(res.body.token).toBeDefined();
+            expect(res.body.token ?? res.body.data?.token).toBeDefined();
             expect(res.body.data).toBeDefined();
             expect(res.body.data.email).toBe(testUser.email);
-            expect(res.body.data.password).toBeUndefined();
+            expect(res.body.data.passwordHash).toBeUndefined();
         });
 
         test('should return user role in response', async () => {
             const res = await request(app)
-                .post('/api/auth/login')
+                .post('/api/v1/auth/login')
                 .send({
                     email: testUser.email,
                     password: testUser.password,
@@ -182,98 +155,110 @@ describe('Auth API Integration Tests', () => {
         });
     });
 
-    describe('POST /api/auth/forgot-password', () => {
-        test('should validate missing email', async () => {
-            const res = await request(app)
-                .post('/api/auth/forgot-password')
+    describe('Session endpoints', () => {
+        test('GET /api/v1/auth/me should reject unauthenticated request', async () => {
+            const res = await request(app).get('/api/v1/auth/me');
+            expect(res.statusCode).toBe(401);
+            expect(res.body.success).toBe(false);
+        });
+
+        test('GET /api/v1/auth/me should return authenticated user', async () => {
+            const agent = request.agent(app);
+
+            const loginRes = await agent
+                .post('/api/v1/auth/login')
+                .send({ email: testUser.email, password: testUser.password });
+
+            expect(loginRes.statusCode).toBe(200);
+
+            const meRes = await agent.get('/api/v1/auth/me');
+            expect(meRes.statusCode).toBe(200);
+            expect(meRes.body.success).toBe(true);
+            expect(meRes.body.data.email).toBe(testUser.email);
+        });
+
+        test('GET /api/v1/auth/sessions should return active session list', async () => {
+            const agent = request.agent(app);
+            await agent
+                .post('/api/v1/auth/login')
+                .send({ email: testUser.email, password: testUser.password });
+
+            const sessionsRes = await agent.get('/api/v1/auth/sessions');
+            expect(sessionsRes.statusCode).toBe(200);
+            expect(sessionsRes.body.success).toBe(true);
+            expect(Array.isArray(sessionsRes.body.data)).toBe(true);
+            expect(sessionsRes.body.data.length).toBeGreaterThan(0);
+            expect(sessionsRes.body.data[0].current).toBe(true);
+        });
+
+        test('POST /api/v1/auth/sessions/revoke should revoke current session', async () => {
+            const agent = request.agent(app);
+            await agent
+                .post('/api/v1/auth/login')
+                .send({ email: testUser.email, password: testUser.password });
+
+            const revokeRes = await agent
+                .post('/api/v1/auth/sessions/revoke')
                 .send({});
 
-            expect(res.statusCode).toBe(400);
-            expect(res.body.success).toBe(false);
-        });
+            expect(revokeRes.statusCode).toBe(200);
+            expect(revokeRes.body.success).toBe(true);
 
-        test('should validate invalid email format', async () => {
-            const res = await request(app)
-                .post('/api/auth/forgot-password')
-                .send({ email: 'invalid-email' });
-
-            expect(res.statusCode).toBe(400);
-            expect(res.body.success).toBe(false);
-        });
-
-        test('should return success even for non-existent email', async () => {
-            const res = await request(app)
-                .post('/api/auth/forgot-password')
-                .send({ email: 'nonexistent@example.com' });
-
-            expect(res.statusCode).toBe(200);
-            expect(res.body.success).toBe(true);
-            expect(res.body.message).toContain('If the email exists');
-        });
-
-        test('should send reset email for existing user', async () => {
-            const res = await request(app)
-                .post('/api/auth/forgot-password')
-                .send({ email: testUser.email });
-
-            expect(res.statusCode).toBe(200);
-            expect(res.body.success).toBe(true);
-            expect(res.body.message).toContain('reset link');
+            const meRes = await agent.get('/api/v1/auth/me');
+            expect(meRes.statusCode).toBe(401);
         });
     });
 
-    describe('POST /api/auth/reset-password', () => {
-        test('should validate missing token', async () => {
-            const res = await request(app)
-                .post('/api/auth/reset-password')
-                .send({
-                    password: 'newPassword123',
-                    confirmPassword: 'newPassword123',
-                });
+    describe('Verification challenge flow', () => {
+        test('issue challenge and verify with valid dev code', async () => {
+            const agent = request.agent(app);
+            await agent
+                .post('/api/v1/auth/login')
+                .send({ email: testUser.email, password: testUser.password });
 
-            expect(res.statusCode).toBe(400);
-            expect(res.body.success).toBe(false);
+            const challengeRes = await agent
+                .post('/api/v1/auth/verification/challenge')
+                .send({ channel: 'email' });
+
+            expect(challengeRes.statusCode).toBe(201);
+            expect(challengeRes.body.success).toBe(true);
+
+            const challengeId = challengeRes.body.data?.challengeId as string;
+            const devCode = challengeRes.body.data?.devCode as string;
+
+            expect(typeof challengeId).toBe('string');
+            expect(challengeId.length).toBeGreaterThan(0);
+            expect(typeof devCode).toBe('string');
+            expect(devCode.length).toBe(6);
+
+            const verifyRes = await agent
+                .post('/api/v1/auth/verification/submit')
+                .send({ challengeId, code: devCode });
+
+            expect(verifyRes.statusCode).toBe(200);
+            expect(verifyRes.body.success).toBe(true);
+            expect(verifyRes.body.message).toBe('Verification successful');
         });
 
-        test('should validate password length', async () => {
-            const res = await request(app)
-                .post('/api/auth/reset-password')
-                .send({
-                    token: 'some-token',
-                    password: '123',
-                    confirmPassword: '123',
-                });
+        test('verification should reject wrong challenge code', async () => {
+            const agent = request.agent(app);
+            await agent
+                .post('/api/v1/auth/login')
+                .send({ email: testUser.email, password: testUser.password });
 
-            expect(res.statusCode).toBe(400);
-            expect(res.body.success).toBe(false);
-        });
+            const challengeRes = await agent
+                .post('/api/v1/auth/verification/challenge')
+                .send({ channel: 'email' });
 
-        test('should validate password mismatch', async () => {
-            const res = await request(app)
-                .post('/api/auth/reset-password')
-                .send({
-                    token: 'some-token',
-                    password: 'newPassword123',
-                    confirmPassword: 'differentPassword123',
-                });
+            const challengeId = challengeRes.body.data?.challengeId as string;
 
-            expect(res.statusCode).toBe(400);
-            expect(res.body.success).toBe(false);
-            expect(res.body.message).toContain('Passwords do not match');
-        });
+            const verifyRes = await agent
+                .post('/api/v1/auth/verification/submit')
+                .send({ challengeId, code: '000000' });
 
-        test('should fail with invalid token', async () => {
-            const res = await request(app)
-                .post('/api/auth/reset-password')
-                .send({
-                    token: 'invalid-token',
-                    password: 'newPassword123',
-                    confirmPassword: 'newPassword123',
-                });
-
-            expect(res.statusCode).toBe(400);
-            expect(res.body.success).toBe(false);
-            expect(res.body.message).toContain('Invalid or expired');
+            expect(verifyRes.statusCode).toBe(400);
+            expect(verifyRes.body.success).toBe(false);
+            expect(verifyRes.body.message).toBe('Invalid challenge code');
         });
     });
 });
