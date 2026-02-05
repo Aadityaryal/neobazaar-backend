@@ -1,21 +1,16 @@
-import { NextFunction, Request, Response } from "express";
-import jwt, { JwtPayload } from "jsonwebtoken";
-import { JWT_SECRET } from "../config";
+import { NextFunction, Response } from "express";
+import { AuthenticatedRequest } from "../types/auth.type";
+import { UserModel } from "../models/user.model";
 
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+export async function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    if (!req.auth?.userId) {
         return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    const token = authHeader.slice("Bearer ".length).trim();
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
-        if (!decoded || typeof decoded !== "object" || decoded.role !== "admin") {
-            return res.status(403).json({ success: false, message: "Forbidden" });
-        }
-        return next();
-    } catch (error) {
-        return res.status(401).json({ success: false, message: "Invalid token" });
+    const user = await UserModel.findOne({ userId: req.auth.userId }).lean();
+    if (!user || user.role !== "admin") {
+        return res.status(403).json({ success: false, message: "Forbidden" });
     }
+
+    return next();
 }

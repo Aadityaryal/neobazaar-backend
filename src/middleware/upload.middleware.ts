@@ -2,20 +2,39 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 
-const uploadDir = path.join(process.cwd(), "uploads", "users");
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
+function ensureDir(dirPath: string) {
+    if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+    }
 }
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
+function sanitizeFilename(fileName: string): string {
+    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    return `${Date.now()}-${safeName}`;
+}
+
+const userUploadDir = path.join(process.cwd(), "uploads", "users");
+const productUploadDir = path.join(process.cwd(), "uploads", "products");
+ensureDir(userUploadDir);
+ensureDir(productUploadDir);
+
+const userStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+        cb(null, userUploadDir);
     },
-    filename: (req, file, cb) => {
-        const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const uniqueName = `${Date.now()}-${safeName}`;
-        cb(null, uniqueName);
+    filename: (_req, file, cb) => {
+        cb(null, sanitizeFilename(file.originalname));
     },
 });
 
-export const userImageUpload = multer({ storage });
+const productStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+        cb(null, productUploadDir);
+    },
+    filename: (_req, file, cb) => {
+        cb(null, sanitizeFilename(file.originalname));
+    },
+});
+
+export const userImageUpload = multer({ storage: userStorage });
+export const productImageUpload = multer({ storage: productStorage });
