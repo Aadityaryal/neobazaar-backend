@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <rect width="1200" height="900" fill="#0f172a"/>
+  <rect x="80" y="120" width="1040" height="660" rx="24" fill="#134e4a"/>
+  <text x="120" y="430" fill="#ecfeff" font-size="72" font-family="Arial, sans-serif">NeoBazaar Item 20 - Earbuds</text>
+</svg>
