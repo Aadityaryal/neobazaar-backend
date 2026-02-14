@@ -1,4 +1,13 @@
 import { UserModel, IUser } from "../models/user.model";
+
+export interface PaginationResult<T> {
+    data: T[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+}
+
 export interface IUserRepository {
     getUserByEmail(email: string): Promise<IUser | null>;
     getUserByUsername(username: string): Promise<IUser | null>;
@@ -7,6 +16,7 @@ export interface IUserRepository {
     createUser(userData: Partial<IUser>): Promise<IUser>;
     getUserById(id: string): Promise<IUser | null>;
     getAllUsers(): Promise<IUser[]>;
+    getAllUsersPaginated(page: number, limit: number, search?: string): Promise<PaginationResult<IUser>>;
     updateUser(id: string, updateData: Partial<IUser>): Promise<IUser | null>;
     deleteUser(id: string): Promise<boolean>;
 }
@@ -34,6 +44,35 @@ export class UserRepository implements IUserRepository {
         const users = await UserModel.find();
         return users;
     }
+
+    async getAllUsersPaginated(page: number, limit: number, search?: string): Promise<PaginationResult<IUser>> {
+        const skip = (page - 1) * limit;
+        
+        // Build search query
+        const query: any = {};
+        if (search) {
+            query.$or = [
+                { firstName: { $regex: search, $options: 'i' } },
+                { lastName: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } },
+                { username: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        const [users, total] = await Promise.all([
+            UserModel.find(query).skip(skip).limit(limit).sort({ createdAt: -1 }),
+            UserModel.countDocuments(query)
+        ]);
+
+        return {
+            data: users,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        };
+    }
+
     async updateUser(id: string, updateData: Partial<IUser>): Promise<IUser | null> {
         // UserModel.updateOne({ _id: id }, { $set: updateData });
         const updatedUser = await UserModel.findByIdAndUpdate(

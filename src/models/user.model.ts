@@ -12,7 +12,9 @@ const UserSchema: Schema = new Schema<UserType>(
             type: String,
             enum: ['user', 'admin'],
             default: 'user',
-        }
+        },
+        resetPasswordToken: { type: String },
+        resetPasswordExpiry: { type: Date },
     },
     {
         timestamps: true, // auto createdAt and updatedAt
